@@ -1,0 +1,3 @@
+[submodule "balatro-web-maker/vendor/love.js"]
+	path = balatro-web-maker/vendor/love.js
+	url = https://github.com/Davidobot/love.js.git
