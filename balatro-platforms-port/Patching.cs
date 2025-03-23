@@ -126,10 +126,17 @@ internal class Patching
     {
         Log("Applying mobile and web compatibilty patches...");
 
-        // Generic platform QOL patches        
+        // Fix NPOT (non-power of two) texture sampling (webgl is ass part 2)
+        ApplyPatchAtLines("game.lua", 1086, 1086, @"    local is_webgl = love.system.getOS() == 'Web'");
+        ApplyPatch("game.lua",  "       self.ANIMATION_ATLAS[self.animation_atli[i].name].image = love.graphics.newImage(self.animation_atli[i].path, {mipmaps = true, dpiscale = self.SETTINGS.GRAPHICS.texture_scaling})", 
+        "       self.ANIMATION_ATLAS[self.animation_atli[i].name].image = love.graphics.newImage(self.animation_atli[i].path, {mipmaps = not is_webgl, dpiscale = self.SETTINGS.GRAPHICS.texture_scaling})");
+        ApplyPatch("game.lua",  "       self.ASSET_ATLAS[self.asset_atli[i].name].image = love.graphics.newImage(self.asset_atli[i].path, {mipmaps = true, dpiscale = self.SETTINGS.GRAPHICS.texture_scaling})", 
+        "      self.ASSET_ATLAS[self.asset_atli[i].name].image = love.graphics.newImage(self.asset_atli[i].path, {mipmaps = not is_webgl, dpiscale = self.SETTINGS.GRAPHICS.texture_scaling})"); 
+        ApplyPatch("game.lua", "        self.ASSET_ATLAS[self.asset_images[i].name].image = love.graphics.newImage(self.asset_images[i].path, {mipmaps = true, dpiscale = 1})",
+        "       self.ASSET_ATLAS[self.asset_images[i].name].image = love.graphics.newImage(self.asset_images[i].path, {mipmaps = not is_webgl, dpiscale = 1})");    
 
         // Disable tutorial and other progression on web bc it starts up every time and is a pain + generic QOL patches
-        if (AskQuestion("Would you like to disable the tutorial and Unlock All on web? (please do, progress resets every time you refresh the game)"))
+        if (AskQuestion("Would you like to disable the tutorial and Unlock All? (please do, progress resets every time you refresh the game on web)"))
         {
             ApplyPatch("globals.lua", "loadstring", @"    -- Removed 'loadstring' line which generated lua code that exited upon starting on mobile
     if love.system.getOS() == 'Android' or love.system.getOS() == 'iOS' or love.system.getOS() == 'Web' then
@@ -143,11 +150,35 @@ internal class Patching
         self.F_QUIT_BUTTON = false
         self.F_SKIP_TUTORIAL = true
     end");  // what a shit way to do this but i have no better ideas bc its late and i need to sleep - veyga
-            ApplyPatchAtLines("main.lua", 115, 115, @"
-    -- Call unlock_all function after game initialization (set by balatro-web-editor)
-	if G.FUNCS and G.FUNCS.unlock_all then
-		G.FUNCS.unlock_all()
-	end");
+            
+            ApplyPatchAtLines("game.lua", 214, 214, @"
+        G.PROFILES[G.SETTINGS.profile].all_unlocked = true
+        for k, v in pairs(G.P_CENTERS) do
+        if not v.demo and not v.wip then 
+            v.alerted = true
+            v.discovered = true
+            v.unlocked = true
+        end
+        end
+        for k, v in pairs(G.P_BLINDS) do
+        if not v.demo and not v.wip then 
+            v.alerted = true
+            v.discovered = true
+            v.unlocked = true
+        end
+        end
+        for k, v in pairs(G.P_TAGS) do
+        if not v.demo and not v.wip then 
+            v.alerted = true
+            v.discovered = true
+            v.unlocked = true
+        end
+        end
+        set_profile_progress()
+        set_discover_tallies()
+        G:save_progress()
+        G.FILE_HANDLER.force = true
+    end");
         } else {
             ApplyPatch("globals.lua", "loadstring", @"    -- Removed 'loadstring' line which generated lua code that exited upon starting on mobile
     if love.system.getOS() == 'Android' or love.system.getOS() == 'iOS' or love.system.getOS() == 'Web' then
@@ -172,14 +203,6 @@ internal class Patching
         // Shader loop bounds fix (webgl is ass and makes loop bounds require const)
         ApplyPatch("resources/shaders/hologram.fs", "int glow_samples = 4;", "  const int glow_samples = 4;");
 
-        // Fix NPOT (non-power of two) texture sampling (webgl is ass part 2)
-        ApplyPatchAtLines("game.lua", 1086, 1086, @"    local is_webgl = love.system.getOS() == 'Web'");
-        ApplyPatch("game.lua",  "       self.ANIMATION_ATLAS[self.animation_atli[i].name].image = love.graphics.newImage(self.animation_atli[i].path, {mipmaps = true, dpiscale = self.SETTINGS.GRAPHICS.texture_scaling})", 
-        "       self.ANIMATION_ATLAS[self.animation_atli[i].name].image = love.graphics.newImage(self.animation_atli[i].path, {mipmaps = not is_webgl, dpiscale = self.SETTINGS.GRAPHICS.texture_scaling})");
-        ApplyPatch("game.lua",  "       self.ASSET_ATLAS[self.asset_atli[i].name].image = love.graphics.newImage(self.asset_atli[i].path, {mipmaps = true, dpiscale = self.SETTINGS.GRAPHICS.texture_scaling})", 
-        "      self.ASSET_ATLAS[self.asset_atli[i].name].image = love.graphics.newImage(self.asset_atli[i].path, {mipmaps = not is_webgl, dpiscale = self.SETTINGS.GRAPHICS.texture_scaling})"); 
-        ApplyPatch("game.lua", "        self.ASSET_ATLAS[self.asset_images[i].name].image = love.graphics.newImage(self.asset_images[i].path, {mipmaps = true, dpiscale = 1})",
-        "       self.ASSET_ATLAS[self.asset_images[i].name].image = love.graphics.newImage(self.asset_images[i].path, {mipmaps = not is_webgl, dpiscale = 1})");
 
         //Ask whether they want the FPS cap patch
         if (AskQuestion("Would you like to apply the FPS cap patch?"))
